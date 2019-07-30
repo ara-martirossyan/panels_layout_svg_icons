@@ -1,0 +1,132 @@
+<?php
+
+/**
+ * @file
+ * Contains panels_layout_svg_icons.module.
+ */
+
+use \Drupal\Core\Routing\RouteMatchInterface;
+use \Drupal\Core\Layout\LayoutDefinition;
+use \Drupal\Core\Form\FormStateInterface;
+use \Drupal\panels\Plugin\DisplayVariant\PanelsDisplayVariant;
+use \Drupal\Core\Asset\AttachedAssetsInterface;
+
+/**
+ * Implements hook_help().
+ */
+function panels_layout_svg_icons_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    // Main module help for the panels_layout_svg_icons module.
+    case 'help.page.panels_layout_svg_icons':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Implements icon_map definition for layouts to generate svg icons in panels and panels_ipe modules.') . '</p>';
+      return $output;
+
+    default:
+  }
+}
+
+/**
+ * Implements hook_layout_alter().
+ */
+function panels_layout_svg_icons_layout_alter(&$definitions) {
+  foreach($definitions as $layout_name => $layout) {
+    // Verify that the layout definition is a LayoutDefinition
+    if ($definitions[$layout_name] instanceof LayoutDefinition) {
+      /** @var \Drupal\Core\Layout\LayoutDefinition[] $definitions*/
+      $definitions[$layout_name]->setIconPath("");
+    }
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter.
+ *
+ * Changes the order of executions of panels_layout_svg_icons_layout_alter and panels_layout_alter hooks.
+ */
+function panels_layout_svg_icons_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'layout_alter') {
+    // Move my_module_layout_alter() to the end of the list
+    // to be executed after panels_layout_alter()
+    // \Drupal::moduleHandler()->getImplementations()
+    // iterates through $implementations with a foreach loop which PHP iterates
+    // in the order that the items were added, so to move an item to the end of
+    // the array, we remove it and then add it.
+    $group = $implementations['panels_layout_svg_icons'];
+    unset($implementations['panels_layout_svg_icons']);
+    $implementations['panels_layout_svg_icons'] = $group;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter.
+ *
+ * @param $form
+ * @param \Drupal\Core\Form\FormStateInterface $form_state
+ *
+ * @throws \Exception
+ */
+function panels_layout_svg_icons_form_panels_layout_selection_form_alter(&$form, FormStateInterface $form_state) {
+  $form['#attached']['library'][] = 'panels_layout_svg_icons/layout-icon-map-svg-icons';
+  $manager = \Drupal::service("plugin.manager.core.layout");
+  /** @var \Drupal\Core\Render\Renderer $renderer */
+  $renderer = \Drupal::service("renderer");
+  $options = panels_layout_svg_icons_options_array_flatten($form['layout']['#options']);
+  $icons = [];
+  foreach ($options as $layout_id => $option) {
+    $icon = $manager->getDefinition($layout_id)->getIcon();
+    $icons[$layout_id] = $renderer->render($icon)->__toString();
+  }
+  $form['#attached']['drupalSettings']['layout']['icons'] = $icons;
+
+  $default_layout = $form['layout']['#default_value'] ?? key($options);
+  $default_icon = $manager->getDefinition($default_layout)->getIcon();
+  $default_icon = $renderer->render($default_icon)->__toString();
+  $form['layout']["#suffix"] = "<p id='layout-icon-wrapper'>" . $default_icon . "</p>";
+}
+
+function panels_layout_svg_icons_options_array_flatten($array, $is_recursive = FALSE) {
+  $result = array();
+  if (is_array($array)) {
+    foreach ($array as $key => $value) {
+      if (is_array($value) && $is_recursive) {
+        $result += panels_layout_svg_icons_options_array_flatten($value);
+      }
+      else {
+        $result += $value;
+      }
+    }
+  }
+  return $result;
+}
+
+/**
+ * Implements hook_panels_ipe_layouts_alter().
+ *
+ * @param array $data
+ * @param \Drupal\panels\Plugin\DisplayVariant\PanelsDisplayVariant $panels_display
+ *
+ * @throws \Exception
+ */
+function panels_layout_svg_icons_panels_ipe_layouts_alter(array &$data, PanelsDisplayVariant $panels_display) {
+  $manager = \Drupal::service("plugin.manager.core.layout");
+  /** @var \Drupal\Core\Render\Renderer $renderer */
+  $renderer = \Drupal::service("renderer");
+  foreach ($data as $datum_key => $datum) {
+    $icon = $manager->getDefinition($data[$datum_key]["id"])->getIcon();
+    $data[$datum_key]["icon"] = $renderer->render($icon)->__toString();
+  }
+}
+
+/**
+ * Implements hook_js_alter().
+ */
+function panels_layout_svg_icons_js_alter(&$javascript, AttachedAssetsInterface $assets) {
+  $layout_picker_js = drupal_get_path('module', 'panels_ipe') . "/js/views/LayoutPicker.js";
+  $layout_picker_override_js = drupal_get_path('module', 'panels_layout_svg_icons') . '/js/LayoutPicker.js';
+  if (isset($javascript[$layout_picker_js])) {
+    $javascript[$layout_picker_js]["data"] = $layout_picker_override_js;
+  }
+}
+

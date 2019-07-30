@@ -1,0 +1,8 @@
+name: 'Panels Layout SVG Icons'
+type: module
+description: 'Implements icon_map definition for layouts to generate svg icons in panels and panels_ipe modules.'
+core: 8.x
+package: 'Panels'
+dependencies:
+  - panels
+  - panels_ipe
